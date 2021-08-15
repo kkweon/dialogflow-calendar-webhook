@@ -7,22 +7,42 @@ import (
 	"github.com/golang/protobuf/jsonpb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/api/calendar/v3"
+	"google.golang.org/api/option"
 	dialogflowpb "google.golang.org/genproto/googleapis/cloud/dialogflow/v2"
+	"google.golang.org/protobuf/types/known/structpb"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 )
 
 const calendarID = "l9c4qhf35d3102u4mmsmlggeqo@group.calendar.google.com"
 
+var startTimeKeys = []string{
+	"startDate", "startTime", "startDateTime", "date_time",
+}
+
+var endTimeKeys = []string{
+	"endDate", "endTime", "endDateTime",
+}
+
 var calendarService *calendar.Service
+var isTestMode bool
 
 func init() {
 	var once sync.Once
 
 	once.Do(func() {
 		var err error
-		calendarService, err = calendar.NewService(context.Background())
+
+		apiKey := os.Getenv("GCP_API_KEY")
+		if apiKey != "" {
+			isTestMode = true
+			calendarService, err = calendar.NewService(context.Background(), option.WithAPIKey(apiKey))
+		} else {
+			calendarService, err = calendar.NewService(context.Background())
+		}
+
 		if err != nil {
 			log.WithError(err).Fatal("failed to initialize calendar service")
 			return
@@ -37,6 +57,7 @@ type CreateEventParams struct {
 	location  string
 }
 
+// MainHTTP is the main entry function.
 func MainHTTP(w http.ResponseWriter, r *http.Request) {
 	webhookRequest := dialogflowpb.WebhookRequest{}
 	if err := jsonpb.Unmarshal(r.Body, &webhookRequest); err != nil {
@@ -54,18 +75,32 @@ func MainHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, _ = fmt.Fprint(w,
-		"event was created at https://www.google.com/calendar/event?eid="+base64.StdEncoding.EncodeToString([]byte(event.Id+" "+calendarID)))
+	resp := dialogflowpb.WebhookResponse{
+		FulfillmentMessages: []*dialogflowpb.Intent_Message{
+			{
+				Message: &dialogflowpb.Intent_Message_Text_{
+					Text: &dialogflowpb.Intent_Message_Text{
+						Text: []string{fmt.Sprintf("Event (%s) was created on %s. You can find your event at %s", params.title, params.startTime.Format(time.UnixDate), getCalendarLink(event.Id, calendarID))}}},
+			},
+		},
+	}
+
+	marshaller := jsonpb.Marshaler{}
+	_ = marshaller.Marshal(w, &resp)
 }
 
+func getCalendarLink(eventID, calendarID string) string {
+	return "https://www.google.com/calendar/event?eid=" + base64.StdEncoding.EncodeToString([]byte(eventID+" "+calendarID))
+}
+
+// extractCreateEventParams extracts necessary parameters from the request for creating an event.
 func extractCreateEventParams(webhookRequest *dialogflowpb.WebhookRequest) CreateEventParams {
 	fieldsMap := webhookRequest.GetQueryResult().GetParameters().GetFields()
 
-	startTimeText := fieldsMap["date-time"].GetStructValue().GetFields()["startTime"].GetStringValue()
-	if startTimeText == "" {
-		startTimeText = fieldsMap["date-time"].GetStringValue()
-	}
-	endTimeText := fieldsMap["date-time"].GetStructValue().GetFields()["endTime"].GetStringValue()
+	dateTimeFields := fieldsMap["date-time"].GetStructValue().GetFields()
+
+	startTimeText := getFirstValue(dateTimeFields, startTimeKeys)
+	endTimeText := getFirstValue(dateTimeFields, endTimeKeys)
 
 	startTime_, err := time.Parse(time.RFC3339, startTimeText)
 	if err != nil {
@@ -94,7 +129,22 @@ func extractCreateEventParams(webhookRequest *dialogflowpb.WebhookRequest) Creat
 	return params
 }
 
+// getFirstValue returns the first value of the keys.
+func getFirstValue(dateTimeFields map[string]*structpb.Value, keys []string) string {
+	for _, key := range keys {
+		if timeText := dateTimeFields[key].GetStringValue(); timeText != "" {
+			return timeText
+		}
+	}
+
+	return ""
+}
+
 func CreateEvent(params CreateEventParams) (*calendar.Event, error) {
+	if isTestMode {
+		return &calendar.Event{Id: "test-event-ID"}, nil
+	}
+
 	event, err := calendarService.Events.Insert(calendarID,
 		&calendar.Event{
 			End: &calendar.EventDateTime{
