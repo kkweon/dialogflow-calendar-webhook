@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"github.com/golang/protobuf/jsonpb"
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/api/calendar/v3"
 	"google.golang.org/api/option"
@@ -67,7 +68,11 @@ func MainHTTP(w http.ResponseWriter, r *http.Request) {
 
 	log.WithField("webhookRequest", webhookRequest.String()).Info("received the request")
 
-	params := extractCreateEventParams(&webhookRequest)
+	params, err := extractCreateEventParams(&webhookRequest)
+	if err != nil {
+		log.WithError(err).Warn("failed to parse event parameters")
+		return
+	}
 
 	event, err := CreateEvent(params)
 	if err != nil {
@@ -94,7 +99,7 @@ func getCalendarLink(eventID, calendarID string) string {
 }
 
 // extractCreateEventParams extracts necessary parameters from the request for creating an event.
-func extractCreateEventParams(webhookRequest *dialogflowpb.WebhookRequest) CreateEventParams {
+func extractCreateEventParams(webhookRequest *dialogflowpb.WebhookRequest) (*CreateEventParams, error) {
 	fieldsMap := webhookRequest.GetQueryResult().GetParameters().GetFields()
 
 	dateTimeFields := fieldsMap["date-time"].GetStructValue().GetFields()
@@ -102,11 +107,13 @@ func extractCreateEventParams(webhookRequest *dialogflowpb.WebhookRequest) Creat
 	startTimeText := getFirstValue(dateTimeFields, startTimeKeys)
 	endTimeText := getFirstValue(dateTimeFields, endTimeKeys)
 
+	if startTimeText == "" {
+		startTimeText = fieldsMap["date-time"].GetStringValue()
+	}
+
 	startTime_, err := time.Parse(time.RFC3339, startTimeText)
 	if err != nil {
-		log.WithError(err).WithFields(log.Fields{
-			"startTimeText": startTimeText,
-		}).Warn("failed to parse startTimeText with RFC3339 format")
+		return nil, errors.Wrap(err, "failed to parse startTimeText")
 	}
 
 	var endTime_ time.Time
@@ -120,13 +127,13 @@ func extractCreateEventParams(webhookRequest *dialogflowpb.WebhookRequest) Creat
 	location := fieldsMap["location"].GetStringValue()
 	title := fieldsMap["title"].GetStringValue()
 
-	params := CreateEventParams{
+	params := &CreateEventParams{
 		startTime: startTime_,
 		endTime:   endTime_,
 		title:     title,
 		location:  location,
 	}
-	return params
+	return params, nil
 }
 
 // getFirstValue returns the first value of the keys.
@@ -140,7 +147,7 @@ func getFirstValue(dateTimeFields map[string]*structpb.Value, keys []string) str
 	return ""
 }
 
-func CreateEvent(params CreateEventParams) (*calendar.Event, error) {
+func CreateEvent(params *CreateEventParams) (*calendar.Event, error) {
 	if isTestMode {
 		return &calendar.Event{Id: "test-event-ID"}, nil
 	}
