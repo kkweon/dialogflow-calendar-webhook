@@ -20,7 +20,7 @@ jobs:
         with:
           go-version: '^1.13.1' # matches Cloud Functions runtime
       - run: go build cmd/main/main.go
-      - run: go test
+      - run: go test ./...
         env:
           GCP_API_KEY: test-api-key
 
