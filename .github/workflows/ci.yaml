@@ -35,5 +35,9 @@ jobs:
       - uses: google-github-actions/deploy-cloud-functions@main
         with:
           name: dialogflow-calendar-integration-webhook
+          entry_point: MainHTTP
+          memory_mb: 128
           runtime: go113
           region: us-west2 # Los Angeles
+          max_instance: 1
+          description: Cloud Functions for Dialogflow Fullfillment (https://dialogflow.cloud.google.com/#/agent/kkweon-free-tier)
