@@ -13,6 +13,7 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -95,7 +96,7 @@ func MainHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func getCalendarLink(eventID, calendarID string) string {
-	return "https://www.google.com/calendar/event?eid=" + base64.StdEncoding.EncodeToString([]byte(eventID+" "+calendarID))
+	return "https://google.com/calendar/event?eid=" + strings.Trim(base64.StdEncoding.EncodeToString([]byte(eventID+" "+calendarID)), "==")
 }
 
 // extractCreateEventParams extracts necessary parameters from the request for creating an event.

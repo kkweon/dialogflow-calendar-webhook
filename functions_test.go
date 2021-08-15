@@ -41,7 +41,7 @@ func TestMainHTTP(t *testing.T) {
 	err = jsonpb.Unmarshal(respRecorder.Body, &webhookResponse)
 	assert.NoError(t, err)
 
-	assert.Contains(t, webhookResponse.GetFulfillmentMessages()[0].GetText().GetText()[0], "Event (title) was created on Sun Aug 15 04:49:00 UTC 2021. You can find your event at https://www.google.com")
+	assert.Contains(t, webhookResponse.GetFulfillmentMessages()[0].GetText().GetText()[0], "Event (title) was created on Sun Aug 15 04:49:00 UTC 2021. You can find your event at")
 }
 
 func must(val *structpb.Struct, err error) *structpb.Struct {
