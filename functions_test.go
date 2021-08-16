@@ -17,7 +17,7 @@ func TestMainHTTP(t *testing.T) {
 	request := dialogflow.WebhookRequest{
 		QueryResult: &dialogflow.QueryResult{
 			Intent: &dialogflow.Intent{
-				DisplayName: "event.create",
+				DisplayName: "event.new",
 			},
 			Parameters: must(structpb.NewStruct(map[string]interface{}{
 				"date-time": map[string]interface{}{

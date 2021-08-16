@@ -71,7 +71,7 @@ func MainHTTP(w http.ResponseWriter, r *http.Request) {
 	log.WithField("webhookRequest", webhookRequest.String()).Info("received the request")
 
 	switch webhookRequest.GetQueryResult().GetIntent().GetDisplayName() {
-	case "event.create":
+	case "event.new":
 		handleEventCreate(webhookRequest, w)
 		return
 	case "ping":
