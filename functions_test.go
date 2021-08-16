@@ -1,15 +1,16 @@
 package dialogflow_calendar_webhook
 
 import (
+	"bytes"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/jsonpb"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/genproto/googleapis/cloud/dialogflow/v2"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -42,11 +43,10 @@ func TestMainHTTP(t *testing.T) {
 	for _, testCase := range testCases {
 
 		t.Run(testCase.request.QueryResult.Intent.DisplayName, func(t *testing.T) {
-			marshaller := jsonpb.Marshaler{}
-			str, err := marshaller.MarshalToString(testCase.request)
+			str, err := protojson.Marshal(testCase.request)
 			assert.NoError(t, err)
 
-			req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(str))
+			req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(str))
 
 			respRecorder := httptest.NewRecorder()
 
@@ -56,7 +56,10 @@ func TestMainHTTP(t *testing.T) {
 			assert.Equal(t, http.StatusOK, respRecorder.Code)
 
 			var webhookResponse dialogflow.WebhookResponse
-			err = jsonpb.Unmarshal(respRecorder.Body, &webhookResponse)
+			bs, err := ioutil.ReadAll(respRecorder.Body)
+			assert.NoError(t, err)
+
+			err = protojson.Unmarshal(bs, &webhookResponse)
 			assert.NoError(t, err)
 
 			assert.Contains(t, webhookResponse.GetFulfillmentMessages()[0].GetText().GetText()[0], testCase.want)

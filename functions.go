@@ -4,18 +4,19 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/jsonpb"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/api/calendar/v3"
 	"google.golang.org/api/option"
 	dialogflowpb "google.golang.org/genproto/googleapis/cloud/dialogflow/v2"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -65,7 +66,15 @@ type CreateEventParams struct {
 // MainHTTP is the main entry function.
 func MainHTTP(w http.ResponseWriter, r *http.Request) {
 	webhookRequest := &dialogflowpb.WebhookRequest{}
-	if err := jsonpb.Unmarshal(r.Body, webhookRequest); err != nil {
+	bs, err := ioutil.ReadAll(r.Body)
+
+	if err != nil {
+		log.WithError(err).Error("failed to read request body")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if err := protojson.Unmarshal(bs, webhookRequest); err != nil {
 		log.WithError(err).Warn("failed to unmarshal dialogflowpb.WebhookRequest")
 		return
 	}
@@ -86,7 +95,6 @@ func MainHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-
 }
 
 func findEventIDFromContext(request *dialogflowpb.WebhookRequest) string {
@@ -139,8 +147,15 @@ func sendMessageToDialogflow(w http.ResponseWriter, webhookRequest *dialogflowpb
 		},
 	}
 
-	marshaller := jsonpb.Marshaler{}
-	_ = marshaller.Marshal(w, &resp)
+	bs, err := protojson.Marshal(&resp)
+	if err != nil {
+		log.WithError(err).Error("failed to marshal response")
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(bs)
 }
 
 func handleEventCreate(webhookRequest *dialogflowpb.WebhookRequest, w http.ResponseWriter) {
@@ -174,7 +189,7 @@ func handleEventCreate(webhookRequest *dialogflowpb.WebhookRequest, w http.Respo
 }
 
 func getCalendarLink(eventID, calendarID string) string {
-	return "https://google.com/calendar/event?eid=" + strings.Trim(base64.StdEncoding.EncodeToString([]byte(eventID+" "+calendarID)), "==")
+	return "https://google.com/calendar/event?eid=" + strings.Trim(base64.StdEncoding.EncodeToString([]byte(eventID+" "+calendarID)), "=")
 }
 
 // extractCreateEventParams extracts necessary parameters from the request for creating an event.
