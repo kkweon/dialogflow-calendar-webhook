@@ -20,7 +20,6 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-const gcpProjectID = "kkweon-free-tier"
 const calendarID = "l9c4qhf35d3102u4mmsmlggeqo@group.calendar.google.com"
 const outputContextNameForEventCreated = "calendar-event"
 
@@ -137,10 +136,7 @@ func sendMessageToDialogflow(w http.ResponseWriter, webhookRequest *dialogflowpb
 		},
 		OutputContexts: []*dialogflowpb.Context{
 			{
-				Name: fmt.Sprintf("projects/%s/agent/sessions/%s/contexts/%s",
-					gcpProjectID,
-					webhookRequest.GetSession(),
-					outputContextNameForEventCreated),
+				Name:          outputContextNameForEventCreated,
 				LifespanCount: 5,
 				Parameters:    payload,
 			},
