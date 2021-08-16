@@ -98,7 +98,7 @@ func MainHTTP(w http.ResponseWriter, r *http.Request) {
 
 func findEventIDFromContext(request *dialogflowpb.WebhookRequest) string {
 	for _, context := range request.GetQueryResult().GetOutputContexts() {
-		if context.GetName() == fmt.Sprintf("%s/%s", request.GetSession(), outputContextNameForEventCreated) {
+		if context.GetName() == fmt.Sprintf("%s/contexts//%s", request.GetSession(), outputContextNameForEventCreated) {
 			return context.GetParameters().GetFields()["eventID"].GetStringValue()
 		}
 	}
@@ -136,7 +136,7 @@ func sendMessageToDialogflow(w http.ResponseWriter, webhookRequest *dialogflowpb
 		},
 		OutputContexts: []*dialogflowpb.Context{
 			{
-				Name:          fmt.Sprintf("%s/%s", webhookRequest.GetSession(), outputContextNameForEventCreated),
+				Name:          fmt.Sprintf("%s/contexts/%s", webhookRequest.GetSession(), outputContextNameForEventCreated),
 				LifespanCount: 5,
 				Parameters:    payload,
 			},
