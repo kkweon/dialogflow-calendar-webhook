@@ -4,6 +4,12 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"net/http"
+	"os"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -11,11 +17,6 @@ import (
 	"google.golang.org/api/option"
 	dialogflowpb "google.golang.org/genproto/googleapis/cloud/dialogflow/v2"
 	"google.golang.org/protobuf/types/known/structpb"
-	"net/http"
-	"os"
-	"strings"
-	"sync"
-	"time"
 )
 
 const calendarID = "l9c4qhf35d3102u4mmsmlggeqo@group.calendar.google.com"
@@ -69,6 +70,36 @@ func MainHTTP(w http.ResponseWriter, r *http.Request) {
 
 	log.WithField("webhookRequest", webhookRequest.String()).Info("received the request")
 
+	switch webhookRequest.GetQueryResult().GetIntent().GetDisplayName() {
+	case "event.create":
+		handleEventCreate(webhookRequest, w)
+		return
+	case "ping":
+		handlePing(webhookRequest, w)
+		return
+	default:
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+}
+
+func handlePing(webhookRequest dialogflowpb.WebhookRequest, w http.ResponseWriter) {
+	resp := dialogflowpb.WebhookResponse{
+		FulfillmentMessages: []*dialogflowpb.Intent_Message{
+			{
+				Message: &dialogflowpb.Intent_Message_Text_{
+					Text: &dialogflowpb.Intent_Message_Text{
+						Text: []string{"pong"}}},
+			},
+		},
+	}
+
+	marshaller := jsonpb.Marshaler{}
+	_ = marshaller.Marshal(w, &resp)
+}
+
+func handleEventCreate(webhookRequest dialogflowpb.WebhookRequest, w http.ResponseWriter) {
 	params, err := extractCreateEventParams(&webhookRequest)
 	if err != nil {
 		log.WithError(err).Warn("failed to parse event parameters")
@@ -120,9 +151,12 @@ func extractCreateEventParams(webhookRequest *dialogflowpb.WebhookRequest) (*Cre
 	var endTime_ time.Time
 
 	if endTimeText == "" {
-		endTime_ = startTime_.Add(time.Hour)
+		endTime_ = startTime_.Add(time.Minute * 30)
 	} else {
 		endTime_, err = time.Parse(time.RFC3339, endTimeText)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to parse endTimeText")
+		}
 	}
 
 	location := fieldsMap["location"].GetStringValue()

@@ -1,20 +1,24 @@
 package dialogflow_calendar_webhook
 
 import (
-	"github.com/golang/protobuf/jsonpb"
-	"github.com/stretchr/testify/assert"
-	"google.golang.org/genproto/googleapis/cloud/dialogflow/v2"
-	"google.golang.org/protobuf/types/known/structpb"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/golang/protobuf/jsonpb"
+	"github.com/stretchr/testify/assert"
+	"google.golang.org/genproto/googleapis/cloud/dialogflow/v2"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 func TestMainHTTP(t *testing.T) {
 	request := dialogflow.WebhookRequest{
 		QueryResult: &dialogflow.QueryResult{
+			Intent: &dialogflow.Intent{
+				DisplayName: "event.create",
+			},
 			Parameters: must(structpb.NewStruct(map[string]interface{}{
 				"date-time": map[string]interface{}{
 					"startDate": time.Date(2021, 8, 15, 4, 49, 0, 0, time.UTC).Format(time.RFC3339),
