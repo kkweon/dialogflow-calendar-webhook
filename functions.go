@@ -21,7 +21,7 @@ import (
 )
 
 const calendarID = "l9c4qhf35d3102u4mmsmlggeqo@group.calendar.google.com"
-const outputContextNameForEventCreated = "calendar-event"
+const outputContextNameForCalendarEvent = "calendar-event"
 
 var startTimeKeys = []string{
 	"startDate", "startTime", "startDateTime", "date_time",
@@ -96,36 +96,40 @@ func MainHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func getContextNameForCalendarEvent(sessionID string) string {
+	return fmt.Sprintf("%s/contexts/%s", sessionID, outputContextNameForCalendarEvent)
+}
+
 func findEventIDFromContext(request *dialogflowpb.WebhookRequest) string {
 	for _, context := range request.GetQueryResult().GetOutputContexts() {
-		if context.GetName() == fmt.Sprintf("%s/contexts//%s", request.GetSession(), outputContextNameForEventCreated) {
+		if context.GetName() == getContextNameForCalendarEvent(request.GetSession()) {
 			return context.GetParameters().GetFields()["eventID"].GetStringValue()
 		}
 	}
 	return ""
 }
 
-func handleEventDelete(webhookRequest *dialogflowpb.WebhookRequest, w http.ResponseWriter) {
-	eventID := findEventIDFromContext(webhookRequest)
+func handleEventDelete(req *dialogflowpb.WebhookRequest, w http.ResponseWriter) {
+	eventID := findEventIDFromContext(req)
 	if eventID == "" {
-		sendMessageToDialogflow(w, webhookRequest, "I wasn't able to find the event", nil)
+		sendMessageToDialogflow(w, req, "I wasn't able to find the event", nil)
 		return
 	}
 
 	if err := calendarService.Events.Delete(calendarID, eventID).Do(); err != nil {
 		log.WithError(err).Warn("failed to delete the event")
-		sendMessageToDialogflow(w, webhookRequest, "I wasn't able to delete the event", nil)
+		sendMessageToDialogflow(w, req, "I wasn't able to delete the event", nil)
 		return
 	}
 
-	sendMessageToDialogflow(w, webhookRequest, "Event was deleted", nil)
+	sendMessageToDialogflow(w, req, "Event was deleted", nil)
 }
 
-func handlePing(webhookRequest *dialogflowpb.WebhookRequest, w http.ResponseWriter) {
-	sendMessageToDialogflow(w, webhookRequest, "pong", nil)
+func handlePing(req *dialogflowpb.WebhookRequest, w http.ResponseWriter) {
+	sendMessageToDialogflow(w, req, "pong", nil)
 }
 
-func sendMessageToDialogflow(w http.ResponseWriter, webhookRequest *dialogflowpb.WebhookRequest, message string, payload *structpb.Struct) {
+func sendMessageToDialogflow(w http.ResponseWriter, req *dialogflowpb.WebhookRequest, message string, payload *structpb.Struct) {
 	resp := dialogflowpb.WebhookResponse{
 		FulfillmentMessages: []*dialogflowpb.Intent_Message{
 			{
@@ -136,7 +140,7 @@ func sendMessageToDialogflow(w http.ResponseWriter, webhookRequest *dialogflowpb
 		},
 		OutputContexts: []*dialogflowpb.Context{
 			{
-				Name:          fmt.Sprintf("%s/contexts/%s", webhookRequest.GetSession(), outputContextNameForEventCreated),
+				Name:          getContextNameForCalendarEvent(req.GetSession()),
 				LifespanCount: 5,
 				Parameters:    payload,
 			},
