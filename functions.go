@@ -19,7 +19,9 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
+const gcpProjectID = "kkweon-free-tier"
 const calendarID = "l9c4qhf35d3102u4mmsmlggeqo@group.calendar.google.com"
+const outputContextNameForEventCreated = "calendar-event"
 
 var startTimeKeys = []string{
 	"startDate", "startTime", "startDateTime", "date_time",
@@ -62,8 +64,8 @@ type CreateEventParams struct {
 
 // MainHTTP is the main entry function.
 func MainHTTP(w http.ResponseWriter, r *http.Request) {
-	webhookRequest := dialogflowpb.WebhookRequest{}
-	if err := jsonpb.Unmarshal(r.Body, &webhookRequest); err != nil {
+	webhookRequest := &dialogflowpb.WebhookRequest{}
+	if err := jsonpb.Unmarshal(r.Body, webhookRequest); err != nil {
 		log.WithError(err).Warn("failed to unmarshal dialogflowpb.WebhookRequest")
 		return
 	}
@@ -87,27 +89,36 @@ func MainHTTP(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func handleEventDelete(webhookRequest dialogflowpb.WebhookRequest, w http.ResponseWriter) {
-	eventID := webhookRequest.GetQueryResult().GetWebhookPayload().GetFields()["eventID"].GetStringValue()
+func findEventIDFromContext(request *dialogflowpb.WebhookRequest) string {
+	for _, context := range request.GetQueryResult().GetOutputContexts() {
+		if context.GetName() == outputContextNameForEventCreated {
+			return context.GetParameters().GetFields()["eventID"].GetStringValue()
+		}
+	}
+	return ""
+}
+
+func handleEventDelete(webhookRequest *dialogflowpb.WebhookRequest, w http.ResponseWriter) {
+	eventID := findEventIDFromContext(webhookRequest)
 	if eventID == "" {
-		sendMessageToDialogflow(w, "I wasn't able to find the event", nil)
+		sendMessageToDialogflow(w, webhookRequest, "I wasn't able to find the event", nil)
 		return
 	}
 
 	if err := calendarService.Events.Delete(calendarID, eventID).Do(); err != nil {
 		log.WithError(err).Warn("failed to delete the event")
-		sendMessageToDialogflow(w, "I wasn't able to delete the event", nil)
+		sendMessageToDialogflow(w, webhookRequest, "I wasn't able to delete the event", nil)
 		return
 	}
 
-	sendMessageToDialogflow(w, "Event was deleted", nil)
+	sendMessageToDialogflow(w, webhookRequest, "Event was deleted", nil)
 }
 
-func handlePing(webhookRequest dialogflowpb.WebhookRequest, w http.ResponseWriter) {
-	sendMessageToDialogflow(w, "pong", nil)
+func handlePing(webhookRequest *dialogflowpb.WebhookRequest, w http.ResponseWriter) {
+	sendMessageToDialogflow(w, webhookRequest, "pong", nil)
 }
 
-func sendMessageToDialogflow(w http.ResponseWriter, message string, payload *structpb.Struct) {
+func sendMessageToDialogflow(w http.ResponseWriter, webhookRequest *dialogflowpb.WebhookRequest, message string, payload *structpb.Struct) {
 	resp := dialogflowpb.WebhookResponse{
 		FulfillmentMessages: []*dialogflowpb.Intent_Message{
 			{
@@ -116,15 +127,24 @@ func sendMessageToDialogflow(w http.ResponseWriter, message string, payload *str
 						Text: []string{message}}},
 			},
 		},
-		Payload: payload,
+		OutputContexts: []*dialogflowpb.Context{
+			{
+				Name: fmt.Sprintf("projects/%s/agent/sessions/%s/contexts/%s",
+					gcpProjectID,
+					webhookRequest.GetSession(),
+					outputContextNameForEventCreated),
+				LifespanCount: 5,
+				Parameters:    payload,
+			},
+		},
 	}
 
 	marshaller := jsonpb.Marshaler{}
 	_ = marshaller.Marshal(w, &resp)
 }
 
-func handleEventCreate(webhookRequest dialogflowpb.WebhookRequest, w http.ResponseWriter) {
-	params, err := extractCreateEventParams(&webhookRequest)
+func handleEventCreate(webhookRequest *dialogflowpb.WebhookRequest, w http.ResponseWriter) {
+	params, err := extractCreateEventParams(webhookRequest)
 	if err != nil {
 		log.WithError(err).Warn("failed to parse event parameters")
 		return
@@ -145,6 +165,7 @@ func handleEventCreate(webhookRequest dialogflowpb.WebhookRequest, w http.Respon
 	}
 
 	sendMessageToDialogflow(w,
+		webhookRequest,
 		fmt.Sprintf("Event (%s) was created on %s. You can find your event at %s",
 			params.title,
 			params.startTime.Format(time.UnixDate),
