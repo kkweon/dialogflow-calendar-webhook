@@ -77,6 +77,9 @@ func MainHTTP(w http.ResponseWriter, r *http.Request) {
 	case "ping":
 		handlePing(webhookRequest, w)
 		return
+	case "event.delete":
+		handleEventDelete(webhookRequest, w)
+		return
 	default:
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -84,15 +87,36 @@ func MainHTTP(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func handleEventDelete(webhookRequest dialogflowpb.WebhookRequest, w http.ResponseWriter) {
+	eventID := webhookRequest.GetQueryResult().GetWebhookPayload().GetFields()["eventID"].GetStringValue()
+	if eventID == "" {
+		sendMessageToDialogflow(w, "I wasn't able to find the event", nil)
+		return
+	}
+
+	if err := calendarService.Events.Delete(calendarID, eventID).Do(); err != nil {
+		log.WithError(err).Warn("failed to delete the event")
+		sendMessageToDialogflow(w, "I wasn't able to delete the event", nil)
+		return
+	}
+
+	sendMessageToDialogflow(w, "Event was deleted", nil)
+}
+
 func handlePing(webhookRequest dialogflowpb.WebhookRequest, w http.ResponseWriter) {
+	sendMessageToDialogflow(w, "pong", nil)
+}
+
+func sendMessageToDialogflow(w http.ResponseWriter, message string, payload *structpb.Struct) {
 	resp := dialogflowpb.WebhookResponse{
 		FulfillmentMessages: []*dialogflowpb.Intent_Message{
 			{
 				Message: &dialogflowpb.Intent_Message_Text_{
 					Text: &dialogflowpb.Intent_Message_Text{
-						Text: []string{"pong"}}},
+						Text: []string{message}}},
 			},
 		},
+		Payload: payload,
 	}
 
 	marshaller := jsonpb.Marshaler{}
@@ -112,18 +136,20 @@ func handleEventCreate(webhookRequest dialogflowpb.WebhookRequest, w http.Respon
 		return
 	}
 
-	resp := dialogflowpb.WebhookResponse{
-		FulfillmentMessages: []*dialogflowpb.Intent_Message{
-			{
-				Message: &dialogflowpb.Intent_Message_Text_{
-					Text: &dialogflowpb.Intent_Message_Text{
-						Text: []string{fmt.Sprintf("Event (%s) was created on %s. You can find your event at %s", params.title, params.startTime.Format(time.UnixDate), getCalendarLink(event.Id, calendarID))}}},
-			},
-		},
+	payload, err := structpb.NewStruct(map[string]interface{}{
+		"eventID": event.Id,
+	})
+	if err != nil {
+		log.WithError(err).Warn("failed to create a payload")
+		return
 	}
 
-	marshaller := jsonpb.Marshaler{}
-	_ = marshaller.Marshal(w, &resp)
+	sendMessageToDialogflow(w,
+		fmt.Sprintf("Event (%s) was created on %s. You can find your event at %s",
+			params.title,
+			params.startTime.Format(time.UnixDate),
+			getCalendarLink(event.Id, calendarID)),
+		payload)
 }
 
 func getCalendarLink(eventID, calendarID string) string {

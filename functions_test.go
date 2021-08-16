@@ -14,38 +14,55 @@ import (
 )
 
 func TestMainHTTP(t *testing.T) {
-	request := dialogflow.WebhookRequest{
-		QueryResult: &dialogflow.QueryResult{
-			Intent: &dialogflow.Intent{
-				DisplayName: "event.new",
-			},
-			Parameters: must(structpb.NewStruct(map[string]interface{}{
-				"date-time": map[string]interface{}{
-					"startDate": time.Date(2021, 8, 15, 4, 49, 0, 0, time.UTC).Format(time.RFC3339),
-					"endDate":   time.Date(2021, 8, 15, 5, 49, 0, 0, time.UTC).Format(time.RFC3339),
+
+	testCases := []struct {
+		request *dialogflow.WebhookRequest
+		want    string
+		wantErr bool
+	}{
+		{
+			request: &dialogflow.WebhookRequest{
+				QueryResult: &dialogflow.QueryResult{
+					Intent: &dialogflow.Intent{
+						DisplayName: "event.new",
+					},
+					Parameters: must(structpb.NewStruct(map[string]interface{}{
+						"date-time": map[string]interface{}{
+							"startDate": time.Date(2021, 8, 15, 4, 49, 0, 0, time.UTC).Format(time.RFC3339),
+							"endDate":   time.Date(2021, 8, 15, 5, 49, 0, 0, time.UTC).Format(time.RFC3339),
+						},
+						"title": "title",
+					})),
 				},
-				"title": "title",
-			})),
+			},
+			want: "Event (title) was created on Sun Aug 15 04:49:00 UTC 2021. You can find your event at",
 		},
 	}
-	marshaller := jsonpb.Marshaler{}
-	str, err := marshaller.MarshalToString(&request)
-	assert.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(str))
+	for _, testCase := range testCases {
 
-	respRecorder := httptest.NewRecorder()
+		t.Run(testCase.request.QueryResult.Intent.DisplayName, func(t *testing.T) {
+			marshaller := jsonpb.Marshaler{}
+			str, err := marshaller.MarshalToString(testCase.request)
+			assert.NoError(t, err)
 
-	handler := http.HandlerFunc(MainHTTP)
-	handler.ServeHTTP(respRecorder, req)
+			req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(str))
 
-	assert.Equal(t, http.StatusOK, respRecorder.Code)
+			respRecorder := httptest.NewRecorder()
 
-	var webhookResponse dialogflow.WebhookResponse
-	err = jsonpb.Unmarshal(respRecorder.Body, &webhookResponse)
-	assert.NoError(t, err)
+			handler := http.HandlerFunc(MainHTTP)
+			handler.ServeHTTP(respRecorder, req)
 
-	assert.Contains(t, webhookResponse.GetFulfillmentMessages()[0].GetText().GetText()[0], "Event (title) was created on Sun Aug 15 04:49:00 UTC 2021. You can find your event at")
+			assert.Equal(t, http.StatusOK, respRecorder.Code)
+
+			var webhookResponse dialogflow.WebhookResponse
+			err = jsonpb.Unmarshal(respRecorder.Body, &webhookResponse)
+			assert.NoError(t, err)
+
+			assert.Contains(t, webhookResponse.GetFulfillmentMessages()[0].GetText().GetText()[0], testCase.want)
+		})
+	}
+
 }
 
 func must(val *structpb.Struct, err error) *structpb.Struct {
