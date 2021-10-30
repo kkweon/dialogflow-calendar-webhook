@@ -20,8 +20,13 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-const calendarID = "l9c4qhf35d3102u4mmsmlggeqo@group.calendar.google.com"
-const outputContextNameForCalendarEvent = "calendar-event"
+const (
+	calendarID                        = "l9c4qhf35d3102u4mmsmlggeqo@group.calendar.google.com"
+	outputContextNameForCalendarEvent = "calendar-event"
+	defaultTimeZoneName               = "America/Los_Angeles"
+)
+
+var defaultTimeZone *time.Location = nil
 
 var startTimeKeys = []string{
 	"startDate", "startTime", "startDateTime", "date_time",
@@ -31,8 +36,10 @@ var endTimeKeys = []string{
 	"endDate", "endTime", "endDateTime",
 }
 
-var calendarService *calendar.Service
-var isTestMode bool
+var (
+	calendarService *calendar.Service
+	isTestMode      bool
+)
 
 func init() {
 	var once sync.Once
@@ -42,6 +49,8 @@ func init() {
 
 		apiKey := os.Getenv("GCP_API_KEY")
 		if apiKey != "" {
+			// the serverless environment does not require API KEY.
+			// As a result, this means it's running locally or in the test environment.
 			isTestMode = true
 			calendarService, err = calendar.NewService(context.Background(), option.WithAPIKey(apiKey))
 		} else {
@@ -49,7 +58,13 @@ func init() {
 		}
 
 		if err != nil {
-			log.WithError(err).Fatal("failed to initialize calendar service")
+			log.WithError(err).Fatal("failed to initialize calendar service. Maybe set GCP_API_KEY environment variable?")
+			return
+		}
+
+		defaultTimeZone, err = time.LoadLocation(defaultTimeZoneName)
+		if err != nil {
+			log.WithError(err).Fatalf("failed to load default time zone (%s)", defaultTimeZoneName)
 			return
 		}
 	})
@@ -66,7 +81,6 @@ type CreateEventParams struct {
 func MainHTTP(w http.ResponseWriter, r *http.Request) {
 	webhookRequest := &dialogflowpb.WebhookRequest{}
 	bs, err := ioutil.ReadAll(r.Body)
-
 	if err != nil {
 		log.WithError(err).Error("failed to read request body")
 		w.WriteHeader(http.StatusBadRequest)
@@ -135,7 +149,9 @@ func sendMessageToDialogflow(w http.ResponseWriter, req *dialogflowpb.WebhookReq
 			{
 				Message: &dialogflowpb.Intent_Message_Text_{
 					Text: &dialogflowpb.Intent_Message_Text{
-						Text: []string{message}}},
+						Text: []string{message},
+					},
+				},
 			},
 		},
 		OutputContexts: []*dialogflowpb.Context{
@@ -252,13 +268,13 @@ func CreateEvent(params *CreateEventParams) (*calendar.Event, error) {
 	event, err := calendarService.Events.Insert(calendarID,
 		&calendar.Event{
 			End: &calendar.EventDateTime{
-				DateTime: params.endTime.Format(time.RFC3339),
+				DateTime: params.endTime.In(defaultTimeZone).Format(time.RFC3339),
 			},
 			EndTimeUnspecified: false,
 			GuestsCanModify:    true,
 			Location:           params.location,
 			Start: &calendar.EventDateTime{
-				DateTime: params.startTime.Format(time.RFC3339),
+				DateTime: params.startTime.In(defaultTimeZone).Format(time.RFC3339),
 			},
 			Summary: params.title,
 		}).Do()

@@ -15,7 +15,6 @@ import (
 )
 
 func TestMainHTTP(t *testing.T) {
-
 	testCases := []struct {
 		request *dialogflow.WebhookRequest
 		want    string
@@ -41,7 +40,6 @@ func TestMainHTTP(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-
 		t.Run(testCase.request.QueryResult.Intent.DisplayName, func(t *testing.T) {
 			str, err := protojson.Marshal(testCase.request)
 			assert.NoError(t, err)
@@ -65,7 +63,6 @@ func TestMainHTTP(t *testing.T) {
 			assert.Contains(t, webhookResponse.GetFulfillmentMessages()[0].GetText().GetText()[0], testCase.want)
 		})
 	}
-
 }
 
 func must(val *structpb.Struct, err error) *structpb.Struct {
