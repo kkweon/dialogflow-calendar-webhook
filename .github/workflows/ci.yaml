@@ -46,4 +46,4 @@ jobs:
           memory: 128Mi
           runtime: go121
           max_instance_count: 1
-          description: Cloud Functions for Dialogflow Fullfillment (https://dialogflow.cloud.google.com/#/agent/kkweon-free-tier)
+          description: Cloud Functions for Dialogflow Fulfillment (https://dialogflow.cloud.google.com/#/agent/kkweon-free-tier)
