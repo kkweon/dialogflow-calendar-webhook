@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -80,7 +80,7 @@ type CreateEventParams struct {
 // MainHTTP is the main entry function.
 func MainHTTP(w http.ResponseWriter, r *http.Request) {
 	webhookRequest := &dialogflowpb.WebhookRequest{}
-	bs, err := ioutil.ReadAll(r.Body)
+	bs, err := io.ReadAll(r.Body)
 	if err != nil {
 		log.WithError(err).Error("failed to read request body")
 		w.WriteHeader(http.StatusBadRequest)

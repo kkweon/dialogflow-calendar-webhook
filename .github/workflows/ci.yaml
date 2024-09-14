@@ -11,14 +11,14 @@ on:
         description: 'Reason for manual run'
 
 jobs:
-  build:
+  build-test:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-go@v2
         with:
-          go-version: '^1.13.1' # matches Cloud Functions runtime
+          go-version: '^1.21' # matches Cloud Functions runtime
       - run: go build cmd/main/main.go
       - run: go test ./...
         env:
@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
 
     needs:
-      - build
+      - build-test
 
     steps:
       - uses: actions/checkout@v2
@@ -45,6 +45,6 @@ jobs:
           name: dialogflow-calendar-integration-webhook
           entry_point: MainHTTP
           memory_mb: 128
-          runtime: go113
+          runtime: go121
           max_instances: 1
           description: Cloud Functions for Dialogflow Fullfillment (https://dialogflow.cloud.google.com/#/agent/kkweon-free-tier)

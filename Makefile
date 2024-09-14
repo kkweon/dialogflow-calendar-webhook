@@ -4,4 +4,4 @@ test:
 
 .PHONY: format
 format:
-	gofumpt -s -w .
+	gofumpt -w .

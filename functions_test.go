@@ -2,7 +2,7 @@ package dialogflow_calendar_webhook
 
 import (
 	"bytes"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -54,7 +54,7 @@ func TestMainHTTP(t *testing.T) {
 			assert.Equal(t, http.StatusOK, respRecorder.Code)
 
 			var webhookResponse dialogflow.WebhookResponse
-			bs, err := ioutil.ReadAll(respRecorder.Body)
+			bs, err := io.ReadAll(respRecorder.Body)
 			assert.NoError(t, err)
 
 			err = protojson.Unmarshal(bs, &webhookResponse)
