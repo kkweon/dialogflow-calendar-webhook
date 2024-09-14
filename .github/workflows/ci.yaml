@@ -31,20 +31,19 @@ jobs:
       - build-test
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@master
+      - id: 'auth'
+        uses: 'google-github-actions/auth@v2'
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
-          service_account_key: ${{ secrets.GCP_SA_KEY }}
-          export_default_credentials: true
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
 
       - uses: google-github-actions/deploy-cloud-functions@main
         with:
           name: dialogflow-calendar-integration-webhook
           entry_point: MainHTTP
-          memory_mb: 128
+          memory: 128M
           runtime: go121
-          max_instances: 1
+          max_instance_count: 1
           description: Cloud Functions for Dialogflow Fullfillment (https://dialogflow.cloud.google.com/#/agent/kkweon-free-tier)
