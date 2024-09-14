@@ -15,8 +15,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-go@v2
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: '^1.21' # matches Cloud Functions runtime
       - run: go build cmd/main/main.go
@@ -43,7 +43,7 @@ jobs:
         with:
           name: dialogflow-calendar-integration-webhook
           entry_point: MainHTTP
-          memory: 128M
+          memory: 128Mi
           runtime: go121
           max_instance_count: 1
           description: Cloud Functions for Dialogflow Fullfillment (https://dialogflow.cloud.google.com/#/agent/kkweon-free-tier)
